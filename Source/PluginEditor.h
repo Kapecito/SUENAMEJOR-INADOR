@@ -148,15 +148,28 @@ public:
     {
         phaseCounter += 0.12f;
 
-        // Balística de la aguja AURA (Vinculada a la perilla Mezcla)
+        // --- Auto-Gain (AGC) para Medidor de Aura ---
         float rawPeak = audioProcessor.currentAudioLevel.load();
-        float mezclaMultiplier = (float)sliderMezcla.getValue(); // 0.0 a 1.0
-        float targetAura = rawPeak * mezclaMultiplier * 2.5f; // Acelerador para visibilidad
         
-        if (targetAura > peakEnvelope)
-            peakEnvelope += (targetAura - peakEnvelope) * 0.35f; // Ataque rápido
+        // Memoria del volumen máximo reciente para normalizar señales muy bajas
+        if (rawPeak > recentMaxPeak)
+            recentMaxPeak = rawPeak;
         else
-            peakEnvelope += (targetAura - peakEnvelope) * 0.08f; // Caída suave
+            recentMaxPeak = juce::jmax (0.0001f, recentMaxPeak * 0.985f); // Caída lenta de la memoria
+
+        float normalizedPeak = rawPeak / recentMaxPeak;
+        
+        // Si hay un mínimo de sonido, oscila en la mitad superior (50% a 100%)
+        float dynamicAura = (rawPeak > 0.0005f) ? (0.5f + normalizedPeak * 0.5f) : 0.0f;
+        
+        float mezclaMultiplier = (float)sliderMezcla.getValue();
+        float targetAura = dynamicAura * mezclaMultiplier; 
+        
+        // Balística de la aguja física
+        if (targetAura > peakEnvelope)
+            peakEnvelope += (targetAura - peakEnvelope) * 0.45f; // Ataque súper rápido
+        else
+            peakEnvelope += (targetAura - peakEnvelope) * 0.08f; // Decaimiento tipo VU analógico
 
         auraNeedle = juce::jlimit (0.0f, 1.0f, peakEnvelope);
 
@@ -176,21 +189,18 @@ public:
 
     void paint (juce::Graphics& g) override
     {
-        // Chasis de fondo
         juce::ColourGradient metalBase (juce::Colour (0xffdadfe8), 0, 0,
                                         juce::Colour (0xffb2b9c4), (float)getWidth(), (float)getHeight(), false);
         g.setGradientFill (metalBase);
         g.fillAll();
 
-        // Título - Negro Opaco Absoluto
         g.setColour (juce::Colour (0xff000000));
         g.setFont (juce::FontOptions (26.0f, juce::Font::bold));
         g.drawText ("SUENAMEJOR - INADOR", 36, 25, 300, 32, juce::Justification::centredLeft);
 
-        // --- MEDIDOR ANALÓGICO 3D (AURA) EN LA ESQUINA SUPERIOR DERECHA ---
+        // --- MEDIDOR AURA 3D ---
         auto vuRect = juce::Rectangle<float> ((float)getWidth() - 170.0f, 16.0f, 140.0f, 52.0f);
         
-        // Bisel exterior metálico
         juce::ColourGradient bezelGrad (juce::Colour (0xffffffff), vuRect.getX(), vuRect.getY(),
                                         juce::Colour (0xff777777), vuRect.getX(), vuRect.getBottom(), false);
         g.setGradientFill (bezelGrad);
@@ -198,19 +208,16 @@ public:
 
         auto innerVu = vuRect.reduced (3.0f);
         
-        // Fondo de papel/cartulina cálido del medidor
         juce::ColourGradient dialGrad (juce::Colour (0xfff9f2e3), innerVu.getX(), innerVu.getY(),
                                        juce::Colour (0xffe5d2ac), innerVu.getX(), innerVu.getBottom(), false);
         g.setGradientFill (dialGrad);
         g.fillRoundedRectangle (innerVu, 3.0f);
 
-        // Sombra interior de profundidad
         g.setColour (juce::Colour (0x77000000));
         g.drawRoundedRectangle (innerVu, 3.0f, 1.5f);
         g.setColour (juce::Colour (0x33000000));
         g.drawRoundedRectangle (innerVu.reduced (1.0f), 3.0f, 0.5f);
 
-        // Textos del medidor
         g.setColour (juce::Colour (0xff000000));
         g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
         g.drawText ("AURA", innerVu.withTrimmedTop(3.0f), juce::Justification::top);
@@ -219,7 +226,6 @@ public:
         g.drawText ("0", innerVu.getX() + 6, innerVu.getBottom() - 16, 20, 10, juce::Justification::left);
         g.drawText ("100", innerVu.getRight() - 26, innerVu.getBottom() - 16, 20, 10, juce::Justification::right);
 
-        // Arco de medición
         juce::Path arc;
         float pivotX = innerVu.getCentreX();
         float pivotY = innerVu.getBottom() + 10.0f;
@@ -229,7 +235,6 @@ public:
         arc.addCentredArc (pivotX, pivotY, radius, radius, 0.0f, startAngle, endAngle, true);
         g.strokePath (arc, juce::PathStrokeType (1.0f));
 
-        // Cinemática de la Aguja (0 a 100 -> Izquierda a Derecha)
         float needleAngle = startAngle + auraNeedle * (endAngle - startAngle);
         juce::Path needle;
         needle.startNewSubPath (pivotX, pivotY);
@@ -239,17 +244,14 @@ public:
         needle.closeSubPath();
         needle.applyTransform (juce::AffineTransform::rotation (needleAngle, pivotX, pivotY));
 
-        // Sombra de la aguja flotante
         g.setColour (juce::Colour (0x55000000));
         juce::Path needleShadow = needle;
         needleShadow.applyTransform (juce::AffineTransform::translation (1.5f, 1.5f));
         g.fillPath (needleShadow);
 
-        // Aguja Roja Activa
         g.setColour (juce::Colour (0xffcc0000));
         g.fillPath (needle);
 
-        // Reflejo 3D del cristal
         juce::Path glassReflect;
         glassReflect.addRoundedRectangle (innerVu.getX(), innerVu.getY(), innerVu.getWidth(), innerVu.getHeight() * 0.45f, 3.0f, 3.0f, false, false, false, false);
         juce::ColourGradient glassGrad (juce::Colour (0x77ffffff), innerVu.getX(), innerVu.getY(),
@@ -258,9 +260,9 @@ public:
         g.fillPath (glassReflect);
 
 
-        // --- LÓGICA NEGRO ABSOLUTO PARA LÍNEAS DE TICKS ---
+        // --- TICKS NEGROS OPACOS ---
         auto drawTicks = [&g](float cx, float cy, float rad) {
-            g.setColour (juce::Colour (0xff000000)); // NEGRO 100% OPACO EXACTAMENTE COMO EL TÍTULO
+            g.setColour (juce::Colour (0xff000000)); 
             for (int i = 0; i <= 10; ++i)
             {
                 float angle = juce::MathConstants<float>::pi * 0.75f + (float)i / 10.0f * (juce::MathConstants<float>::pi * 1.5f);
@@ -268,22 +270,20 @@ public:
                 float y1 = cy + std::sin (angle) * (rad + 2.5f);
                 float x2 = cx + std::cos (angle) * (rad + 7.5f);
                 float y2 = cy + std::sin (angle) * (rad + 7.5f);
-                g.drawLine (x1, y1, x2, y2, 2.0f); // Trazos gruesos
+                g.drawLine (x1, y1, x2, y2, 2.0f); 
             }
         };
 
-        // --- TEXTOS EN NEGRO ABSOLUTO Y FUENTE MÁS GRUESA ---
-        g.setColour (juce::Colour (0xff000000)); // NEGRO 100%
+        // --- TEXTOS EN NEGRO ABSOLUTO GRUESO ---
+        g.setColour (juce::Colour (0xff000000)); 
         g.setFont (juce::FontOptions (14.0f, juce::Font::bold));
 
-        // Punche (1 a 67)
         drawTicks (68.0f, 138.0f, 34.0f);
         g.drawText ("PUNCHE", 18, 68, 100, 18, juce::Justification::centred);
         g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
         g.drawText ("1", 22, 182, 18, 16, juce::Justification::centred);
         g.drawText ("67", 96, 182, 26, 16, juce::Justification::centred);
 
-        // Efecto (POP a INDIE)
         drawTicks ((float)getWidth() - 68.0f, 138.0f, 34.0f);
         g.setFont (juce::FontOptions (14.0f, juce::Font::bold));
         g.drawText ("EFECTO", getWidth() - 118, 68, 100, 18, juce::Justification::centred);
@@ -291,7 +291,6 @@ public:
         g.drawText ("POP", getWidth() - 130, 182, 36, 16, juce::Justification::centred);
         g.drawText ("INDIE", getWidth() - 54, 182, 42, 16, juce::Justification::centred);
 
-        // Armonía (0 a MAX)
         drawTicks (68.0f, 274.0f, 34.0f);
         g.setFont (juce::FontOptions (14.0f, juce::Font::bold));
         g.drawText ("ARMONIA", 18, 204, 100, 18, juce::Justification::centred);
@@ -299,7 +298,6 @@ public:
         g.drawText ("0", 22, 318, 18, 16, juce::Justification::centred);
         g.drawText ("MAX", 96, 318, 30, 16, juce::Justification::centred);
 
-        // Mezcla (0 a 100)
         drawTicks ((float)getWidth() - 68.0f, 274.0f, 34.0f);
         g.setFont (juce::FontOptions (14.0f, juce::Font::bold));
         g.drawText ("MEZCLA", getWidth() - 118, 204, 100, 18, juce::Justification::centred);
@@ -307,7 +305,6 @@ public:
         g.drawText ("0", getWidth() - 118, 318, 18, 16, juce::Justification::centred);
         g.drawText ("100", getWidth() - 48, 318, 26, 16, juce::Justification::centred);
 
-        // Sazón (1 a 420)
         g.setFont (juce::FontOptions (14.0f, juce::Font::bold));
         g.drawText ("SAZON", getWidth() / 2 - 50, 362, 100, 18, juce::Justification::centred);
         g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
@@ -348,7 +345,8 @@ public:
         float armoniaVal = (float)sliderArmonia.getValue();
         float mezclaVal = (float)sliderMezcla.getValue();
 
-        float spreadFactor = 0.15f + efectoVal * 0.85f;
+        // Expansión horizontal inicial mayor (40% de ancho en 0, 100% en 1)
+        float spreadFactor = 0.40f + efectoVal * 0.60f;
         float activeWidth = innerScreen.getWidth() * spreadFactor;
         float startX = innerScreen.getCentreX() - (activeWidth / 2.0f);
 
@@ -361,7 +359,9 @@ public:
         for (int i = 0; i < AudioPluginAudioProcessor::scopeSize; ++i)
         {
             float rawLevel = audioProcessor.scopeData[i];
-            float dynamicLevel = rawLevel * (0.12f + puncheNorm * 1.8f);
+            
+            // Empieza notoriamente más alto desde el comienzo (0.35f multiplicador base)
+            float dynamicLevel = rawLevel * (0.35f + puncheNorm * 1.5f);
 
             if (armoniaVal > 0.01f)
             {
@@ -393,9 +393,10 @@ public:
         g.setGradientFill (fillGrad);
         g.fillPath (fillPath);
 
-        float strokeThickness = 1.6f + puncheNorm * 2.2f;
+        // Grosor Invertido: Grueso y redondo (4.5px) al inicio, fino y preciso (1.5px) con el Punche a tope.
+        float strokeThickness = 4.5f - (puncheNorm * 3.0f);
         g.setColour (coreColor.brighter (0.4f).withAlpha (0.95f));
-        g.strokePath (spectrumPath, juce::PathStrokeType (strokeThickness, juce::PathStrokeType::curved));
+        g.strokePath (spectrumPath, juce::PathStrokeType (strokeThickness, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
     }
 
     void resized() override
@@ -423,6 +424,7 @@ private:
     float phaseCounter = 0.0f;
     float auraNeedle = 0.0f;
     float peakEnvelope = 0.0f;
+    float recentMaxPeak = 0.001f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessorEditor)
 };
