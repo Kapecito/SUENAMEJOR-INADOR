@@ -7,7 +7,7 @@ class MetalKnobLookAndFeel : public juce::LookAndFeel_V4
 public:
     void drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height,
                            float sliderPos, float rotaryStartAngle, float rotaryEndAngle,
-                           juce::Slider& slider) override
+                           juce::Slider& /*slider*/) override
     {
         auto bounds = juce::Rectangle<int> (x, y, width, height).toFloat().reduced (8.0f);
         auto radius = juce::jmin (bounds.getWidth(), bounds.getHeight()) / 2.0f;
