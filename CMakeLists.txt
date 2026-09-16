@@ -1,9 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 project(SUENAMEJOR_INADOR VERSION 1.0.0)
 
-# Enlazar C++ Runtime estáticamente para que no dependa de DLLs externas en Windows
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-
 include(FetchContent)
 FetchContent_Declare(
     JUCE
@@ -40,6 +37,10 @@ target_compile_definitions(SUENAMEJOR_INADOR
         JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0
 )
+
+# Enlace estático obligatorio del C++ Runtime en Windows
+set_property(TARGET SUENAMEJOR_INADOR PROPERTY
+    MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 target_link_libraries(SUENAMEJOR_INADOR
     PRIVATE

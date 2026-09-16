@@ -21,11 +21,12 @@ jobs:
       - name: Build Plugin
         run: cmake --build build --config Release --parallel
 
-      - name: Compress Windows VST3
+      - name: Package Windows Artifacts
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          Compress-Archive -Path "build/SUENAMEJOR_INADOR_artefacts/Release/VST3/SUENAMEJOR - INADOR.vst3" -DestinationPath "build/SUENAMEJOR-INADOR-Windows.zip"
+          cd build/SUENAMEJOR_INADOR_artefacts/Release/VST3
+          Compress-Archive -Path "SUENAMEJOR - INADOR.vst3" -DestinationPath "../../../SUENAMEJOR-INADOR-Windows.zip"
 
       - name: Upload Windows Artifacts
         if: matrix.os == 'windows-latest'
