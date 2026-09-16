@@ -7,11 +7,12 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
        forwardFFT (fftOrder),
        window (fftSize, juce::dsp::WindowingFunction<float>::hann)
 {
-    addParameter (paramPunche = new juce::AudioParameterFloat ("punche", "Punche", 1.0f, 67.0f, 33.0f));
-    addParameter (paramEfecto = new juce::AudioParameterFloat ("efecto", "Efecto", 0.0f, 1.0f, 0.5f));
-    addParameter (paramArmonia = new juce::AudioParameterFloat ("armonia", "Armonia", 0.0f, 1.0f, 0.5f));
-    addParameter (paramMezcla = new juce::AudioParameterFloat ("mezcla", "Mezcla", 0.0f, 1.0f, 0.75f));
-    addParameter (paramSazon = new juce::AudioParameterFloat ("sazon", "Sazon", 1.0f, 420.0f, 210.0f));
+    // Todos inician en su valor mínimo (0)
+    addParameter (paramPunche  = new juce::AudioParameterFloat ("punche",  "Punche",  0.0f, 1.0f, 0.0f));
+    addParameter (paramEfecto  = new juce::AudioParameterFloat ("efecto",  "Efecto",  0.0f, 1.0f, 0.0f));
+    addParameter (paramArmonia = new juce::AudioParameterFloat ("armonia", "Armonia", 0.0f, 1.0f, 0.0f));
+    addParameter (paramMezcla  = new juce::AudioParameterFloat ("mezcla",  "Mezcla",  0.0f, 1.0f, 0.0f));
+    addParameter (paramSazon   = new juce::AudioParameterFloat ("sazon",   "Sazon",   1.0f, 420.0f, 1.0f));
     addParameter (paramClaveSol = new juce::AudioParameterBool ("clavesol", "Clave de sol", false));
 
     std::fill (std::begin (fifo), std::end (fifo), 0.0f);
@@ -62,19 +63,17 @@ void AudioPluginAudioProcessor::drawNextFrameOfSpectrum()
     window.multiplyWithWindowingTable (fftData, fftSize);
     forwardFFT.performFrequencyOnlyForwardTransform (fftData);
 
-    auto mindB = -80.0f;
+    auto mindB = -75.0f;
     auto maxdB = 0.0f;
 
     for (int i = 0; i < scopeSize; ++i)
     {
-        // Mapeo logarítmico de frecuencias (20 Hz a 20 kHz tipo Pro-Q)
-        auto skewedProportionX = 1.0f - std::exp (std::log (1.0f - (float)i / (float)scopeSize) * 0.2f);
+        auto skewedProportionX = 1.0f - std::exp (std::log (1.0f - (float)i / (float)scopeSize) * 0.22f);
         auto fftDataIndex = juce::jlimit (0, fftSize / 2, (int)(skewedProportionX * (float)(fftSize / 2)));
         auto level = juce::jmap (juce::jlimit (mindB, maxdB, juce::Decibels::gainToDecibels (fftData[fftDataIndex]) - juce::Decibels::gainToDecibels ((float)fftSize)),
                                  mindB, maxdB, 0.0f, 1.0f);
-        
-        // Caída suave (decay tipo Pro-Q)
-        scopeData[i] = juce::jmax (level, scopeData[i] * 0.82f);
+
+        scopeData[i] = juce::jmax (level, scopeData[i] * 0.78f);
     }
 }
 
