@@ -22,6 +22,9 @@ juce_add_plugin(SUENAMEJOR_INADOR
     COPY_PLUGIN_AFTER_BUILD FALSE
 )
 
+# Genera JuceHeader.h automáticamente para los archivos C++
+juce_generate_juce_header(SUENAMEJOR_INADOR)
+
 target_sources(SUENAMEJOR_INADOR
     PRIVATE
         Source/PluginProcessor.h
