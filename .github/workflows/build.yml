@@ -1,0 +1,37 @@
+name: Build VST3 and AU
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build Plugin
+        run: cmake --build build --config Release --parallel
+
+      - name: Upload Windows Artifacts
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SUENAMEJOR-INADOR-Windows
+          path: build/SUENAMEJOR_INADOR_artefacts/Release/VST3/SUENAMEJOR - INADOR.vst3
+
+      - name: Upload macOS Artifacts
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SUENAMEJOR-INADOR-macOS
+          path: |
+            build/SUENAMEJOR_INADOR_artefacts/Release/VST3/SUENAMEJOR - INADOR.vst3
+            build/SUENAMEJOR_INADOR_artefacts/Release/AU/SUENAMEJOR - INADOR.component
