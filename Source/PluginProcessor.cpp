@@ -7,8 +7,8 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
        forwardFFT (fftOrder),
        window (fftSize, juce::dsp::WindowingFunction<float>::hann)
 {
-    // Todos inician en su valor mínimo (0)
-    addParameter (paramPunche  = new juce::AudioParameterFloat ("punche",  "Punche",  0.0f, 1.0f, 0.0f));
+    // Punche de 1 a 67 iniciando en 1; Efecto de 0.0 (POP) a 1.0 (INDIE) iniciando en 0.0
+    addParameter (paramPunche  = new juce::AudioParameterFloat ("punche",  "Punche",  1.0f, 67.0f, 1.0f));
     addParameter (paramEfecto  = new juce::AudioParameterFloat ("efecto",  "Efecto",  0.0f, 1.0f, 0.0f));
     addParameter (paramArmonia = new juce::AudioParameterFloat ("armonia", "Armonia", 0.0f, 1.0f, 0.0f));
     addParameter (paramMezcla  = new juce::AudioParameterFloat ("mezcla",  "Mezcla",  0.0f, 1.0f, 0.0f));

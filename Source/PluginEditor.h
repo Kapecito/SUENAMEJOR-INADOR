@@ -61,7 +61,7 @@ public:
         auto toAngle = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
         auto center = bounds.getCentre();
 
-        // Aro de resplandor que se enciende con el nivel (sliderPos 0.0 a 1.0)
+        // Aro de resplandor proporcional al nivel
         juce::Colour glowOff (0x00000000);
         juce::Colour glowActive (0xff00d5ff);
         auto glowColor = glowOff.interpolatedWith (glowActive, sliderPos * 0.9f);
@@ -76,7 +76,7 @@ public:
         g.setColour (juce::Colour (0x44000000));
         g.fillEllipse (bounds.translated (0.0f, 2.5f));
 
-        // Cuerpo metálico de la perilla
+        // Cuerpo metálico
         juce::ColourGradient knobGrad (juce::Colour (0xffedf0f5), center.x - radius, center.y - radius,
                                       juce::Colour (0xff8e94a0), center.x + radius, center.y + radius, false);
         g.setGradientFill (knobGrad);
@@ -86,7 +86,7 @@ public:
         g.setColour (sliderPos > 0.05f ? glowActive.withAlpha (sliderPos * 0.85f) : juce::Colour (0xffffffff).withAlpha (0.4f));
         g.drawEllipse (bounds, 1.2f);
 
-        // Puntero interior
+        // Puntero
         juce::Path p;
         auto pointerLength = radius * 0.72f;
         p.addRectangle (-1.5f, -radius, 3.0f, pointerLength * 0.5f);
@@ -112,16 +112,16 @@ public:
             addAndMakeVisible (s);
         };
 
-        // Punche (0.0 a 1.0)
+        // Punche (1 a 67, inicia en 1)
         setupKnob (sliderPunche);
-        sliderPunche.setRange (0.0, 1.0, 0.01);
+        sliderPunche.setRange (1.0, 67.0, 0.1);
         sliderPunche.setValue (*audioProcessor.paramPunche);
         sliderPunche.onValueChange = [this] {
             *audioProcessor.paramPunche = (float)sliderPunche.getValue();
             repaint();
         };
 
-        // Efecto (0.0 a 1.0)
+        // Efecto (0.0 = POP, 1.0 = INDIE, inicia en 0.0)
         setupKnob (sliderEfecto);
         sliderEfecto.setRange (0.0, 1.0, 0.01);
         sliderEfecto.setValue (*audioProcessor.paramEfecto);
@@ -130,7 +130,7 @@ public:
             repaint();
         };
 
-        // Armonía (0.0 a 1.0)
+        // Armonía (0.0 a 1.0, inicia en 0.0)
         setupKnob (sliderArmonia);
         sliderArmonia.setRange (0.0, 1.0, 0.01);
         sliderArmonia.setValue (*audioProcessor.paramArmonia);
@@ -139,7 +139,7 @@ public:
             repaint();
         };
 
-        // Mezcla (0.0 a 1.0)
+        // Mezcla (0.0 a 1.0, inicia en 0.0)
         setupKnob (sliderMezcla);
         sliderMezcla.setRange (0.0, 1.0, 0.01);
         sliderMezcla.setValue (*audioProcessor.paramMezcla);
@@ -148,6 +148,7 @@ public:
             repaint();
         };
 
+        // Sazón (1 a 420, inicia en 1)
         sliderSazon.setSliderStyle (juce::Slider::LinearHorizontal);
         sliderSazon.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
         sliderSazon.setRange (1.0, 420.0, 1.0);
@@ -217,26 +218,26 @@ public:
             }
         };
 
-        // --- TEXTOS EN NEGRO ABSOLUTO Y MARCAS SEPARADAS ---
+        // --- TEXTOS EN NEGRO ABSOLUTO Y RANGOS ORIGINALES ---
         g.setColour (juce::Colour (0xff000000));
         g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
 
-        // Punche (izq superior)
+        // Punche (1 a 67)
         drawTicks (68.0f, 138.0f, 34.0f);
         g.drawText ("PUNCHE", 18, 70, 100, 18, juce::Justification::centred);
         g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
-        g.drawText ("0", 24, 180, 18, 16, juce::Justification::centred);
-        g.drawText ("100", 94, 180, 26, 16, juce::Justification::centred);
+        g.drawText ("1", 24, 180, 18, 16, juce::Justification::centred);
+        g.drawText ("67", 94, 180, 26, 16, juce::Justification::centred);
 
-        // Efecto (der superior)
+        // Efecto (POP a INDIE)
         drawTicks ((float)getWidth() - 68.0f, 138.0f, 34.0f);
         g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
         g.drawText ("EFECTO", getWidth() - 118, 70, 100, 18, juce::Justification::centred);
         g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
-        g.drawText ("CENTRO", getWidth() - 128, 180, 48, 16, juce::Justification::centred);
-        g.drawText ("WIDE", getWidth() - 54, 180, 36, 16, juce::Justification::centred);
+        g.drawText ("POP", getWidth() - 128, 180, 36, 16, juce::Justification::centred);
+        g.drawText ("INDIE", getWidth() - 54, 180, 42, 16, juce::Justification::centred);
 
-        // Armonía (izq inferior)
+        // Armonía (0 a 100)
         drawTicks (68.0f, 274.0f, 34.0f);
         g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
         g.drawText ("ARMONIA", 18, 206, 100, 18, juce::Justification::centred);
@@ -244,7 +245,7 @@ public:
         g.drawText ("0", 24, 316, 18, 16, juce::Justification::centred);
         g.drawText ("MAX", 94, 316, 26, 16, juce::Justification::centred);
 
-        // Mezcla (der inferior)
+        // Mezcla (0 a 100)
         drawTicks ((float)getWidth() - 68.0f, 274.0f, 34.0f);
         g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
         g.drawText ("MEZCLA", getWidth() - 118, 206, 100, 18, juce::Justification::centred);
@@ -252,7 +253,7 @@ public:
         g.drawText ("0", getWidth() - 118, 316, 18, 16, juce::Justification::centred);
         g.drawText ("100", getWidth() - 48, 316, 26, 16, juce::Justification::centred);
 
-        // Sazón (slider inferior)
+        // Sazón (1 a 420)
         g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
         g.drawText ("SAZON", getWidth() / 2 - 50, 362, 100, 18, juce::Justification::centred);
         g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
@@ -277,7 +278,7 @@ public:
         g.setGradientFill (chamberGlow);
         g.fillRoundedRectangle (innerScreen, 6.0f);
 
-        // Rejilla de contención sutil
+        // Rejilla de contención
         g.setColour (juce::Colour (0x15ffffff));
         for (int row = 1; row <= 3; ++row)
         {
@@ -291,12 +292,13 @@ public:
         }
 
         // --- DINÁMICA DE PARÁMETROS EN EL ESPECTRO ---
-        float puncheVal = (float)sliderPunche.getValue();   // Multiplica picos y volumen
-        float efectoVal = (float)sliderEfecto.getValue();   // Expande horizontalmente desde el centro
-        float armoniaVal = (float)sliderArmonia.getValue(); // Agrega rizado sinusoidal
-        float mezclaVal = (float)sliderMezcla.getValue();   // Densidad y opacidad del relleno
+        // Normalización de Punche (de 1 a 67 -> 0.0 a 1.0)
+        float puncheNorm = ((float)sliderPunche.getValue() - 1.0f) / 66.0f;
+        float efectoVal = (float)sliderEfecto.getValue();   // 0.0 (POP = angosto en centro) a 1.0 (INDIE = ancho completo)
+        float armoniaVal = (float)sliderArmonia.getValue(); // Ondulación senoidal
+        float mezclaVal = (float)sliderMezcla.getValue();   // Opacidad del relleno
 
-        // Efecto: Ancho activo de 15% (comprimido en el centro) a 100% (ancho completo)
+        // Expansión horizontal: POP concentra el haz al centro, INDIE lo expande completamente
         float spreadFactor = 0.15f + efectoVal * 0.85f;
         float activeWidth = innerScreen.getWidth() * spreadFactor;
         float startX = innerScreen.getCentreX() - (activeWidth / 2.0f);
@@ -311,11 +313,10 @@ public:
         {
             float rawLevel = audioProcessor.scopeData[i];
 
-            // Al inicio con perillas en 0 el movimiento es muy sutil
-            // Conforme sube Punche, los picos explotan verticalmente
-            float dynamicLevel = rawLevel * (0.12f + puncheVal * 1.8f);
+            // Al inicio (Punche en 1) la respuesta es sutil; conforme sube a 67 explota en picos
+            float dynamicLevel = rawLevel * (0.12f + puncheNorm * 1.8f);
 
-            // Armonía introduce modulación de fase ondulante sobre las crestas
+            // Modulación armónica senoidal
             if (armoniaVal > 0.01f)
             {
                 float ripple = std::sin ((float)i * 0.35f + phaseCounter) * (0.18f * armoniaVal) * (rawLevel + 0.1f);
@@ -336,7 +337,7 @@ public:
         fillPath.lineTo (startX + activeWidth, bottomY);
         fillPath.closeSubPath();
 
-        // Relleno radioactivo modulado por Mezcla y teñido por Sazón
+        // Relleno teñido por Sazón y modulado por Mezcla
         juce::Colour beamCold (0xff00d5ff);
         juce::Colour beamWarm (0xffff6200);
         auto coreColor = beamCold.interpolatedWith (beamWarm, sazonNorm);
@@ -348,14 +349,13 @@ public:
         g.fillPath (fillPath);
 
         // Haz principal con grosor reactivo al Punche
-        float strokeThickness = 1.6f + puncheVal * 2.2f;
+        float strokeThickness = 1.6f + puncheNorm * 2.2f;
         g.setColour (coreColor.brighter (0.4f).withAlpha (0.95f));
         g.strokePath (spectrumPath, juce::PathStrokeType (strokeThickness, juce::PathStrokeType::curved));
     }
 
     void resized() override
     {
-        // Perillas compactas de 64x64 px más separadas
         sliderPunche.setBounds (36, 106, 64, 64);
         sliderEfecto.setBounds (getWidth() - 100, 106, 64, 64);
         sliderArmonia.setBounds (36, 242, 64, 64);
