@@ -26,7 +26,7 @@ public:
             g.drawRoundedRectangle (bounds, 6.0f, 2.0f);
 
             g.setColour (juce::Colour (0xff210a01));
-            g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
+            g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
             g.drawText ("CLAVE DE SOL", bounds, juce::Justification::centred);
         }
         else
@@ -40,7 +40,7 @@ public:
             g.drawRoundedRectangle (bounds, 6.0f, 1.2f);
 
             g.setColour (juce::Colour (0xff8f96a3));
-            g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
+            g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
             g.drawText ("CLAVE DE SOL", bounds, juce::Justification::centred);
         }
     }
@@ -86,6 +86,48 @@ public:
         g.setColour (sliderPos > 0.1f ? juce::Colour (0xff002538) : juce::Colour (0xff151619));
         g.fillPath (p);
     }
+
+    void drawLinearSlider (juce::Graphics& g, int x, int y, int width, int height,
+                           float sliderPos, float /*minSliderPos*/, float /*maxSliderPos*/,
+                           juce::Slider::SliderStyle /*style*/, juce::Slider& /*slider*/) override
+    {
+        // Riel metálico hendido (slot hundido)
+        auto trackY = (float)y + (float)height * 0.5f - 2.5f;
+        auto trackRect = juce::Rectangle<float> ((float)x, trackY, (float)width, 5.0f);
+
+        g.setColour (juce::Colour (0xff1a1c20));
+        g.fillRoundedRectangle (trackRect, 2.5f);
+
+        g.setColour (juce::Colour (0xff454a54));
+        g.drawRoundedRectangle (trackRect, 2.5f, 1.0f);
+
+        // Handle 3D de fader analógico
+        float handleW = 16.0f;
+        float handleH = 22.0f;
+        float handleX = sliderPos - handleW * 0.5f;
+        float handleY = (float)y + (float)height * 0.5f - handleH * 0.5f;
+        auto handleRect = juce::Rectangle<float> (handleX, handleY, handleW, handleH);
+
+        // Sombra arrojada del handle
+        g.setColour (juce::Colour (0x55000000));
+        g.fillRoundedRectangle (handleRect.translated (0.0f, 2.0f), 3.0f);
+
+        // Bloque del fader con relieve satinado
+        juce::ColourGradient handleGrad (juce::Colour (0xfff0f2f7), handleX, handleY,
+                                         juce::Colour (0xff8f96a3), handleX + handleW, handleY + handleH, false);
+        g.setGradientFill (handleGrad);
+        g.fillRoundedRectangle (handleRect, 3.0f);
+
+        // Borde biselado
+        g.setColour (juce::Colour (0xffffffff).withAlpha (0.8f));
+        g.drawRoundedRectangle (handleRect, 3.0f, 1.0f);
+
+        // Ranura central en bajo relieve con indicador rojo
+        g.setColour (juce::Colour (0xff202226));
+        g.fillRect (handleX + handleW * 0.5f - 1.0f, handleY + 3.0f, 2.0f, handleH - 6.0f);
+        g.setColour (juce::Colour (0xffff3b14));
+        g.fillRect (handleX + handleW * 0.5f - 0.7f, handleY + 4.0f, 1.4f, handleH - 8.0f);
+    }
 };
 
 class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
@@ -95,7 +137,7 @@ public:
     AudioPluginAudioProcessorEditor (AudioPluginAudioProcessor& p)
         : AudioProcessorEditor (&p), audioProcessor (p)
     {
-        setSize (700, 520);
+        setSize (700, 530);
         setLookAndFeel (&glowingLook);
 
         auto setupKnob = [this](juce::Slider& s) {
@@ -148,28 +190,23 @@ public:
     {
         phaseCounter += 0.12f;
 
-        // --- Auto-Gain (AGC) para Medidor de Aura ---
         float rawPeak = audioProcessor.currentAudioLevel.load();
         
-        // Memoria del volumen máximo reciente para normalizar señales muy bajas
         if (rawPeak > recentMaxPeak)
             recentMaxPeak = rawPeak;
         else
-            recentMaxPeak = juce::jmax (0.0001f, recentMaxPeak * 0.985f); // Caída lenta de la memoria
+            recentMaxPeak = juce::jmax (0.0001f, recentMaxPeak * 0.985f);
 
         float normalizedPeak = rawPeak / recentMaxPeak;
-        
-        // Si hay un mínimo de sonido, oscila en la mitad superior (50% a 100%)
         float dynamicAura = (rawPeak > 0.0005f) ? (0.5f + normalizedPeak * 0.5f) : 0.0f;
         
         float mezclaMultiplier = (float)sliderMezcla.getValue();
         float targetAura = dynamicAura * mezclaMultiplier; 
         
-        // Balística de la aguja física
         if (targetAura > peakEnvelope)
-            peakEnvelope += (targetAura - peakEnvelope) * 0.45f; // Ataque súper rápido
+            peakEnvelope += (targetAura - peakEnvelope) * 0.45f;
         else
-            peakEnvelope += (targetAura - peakEnvelope) * 0.08f; // Decaimiento tipo VU analógico
+            peakEnvelope += (targetAura - peakEnvelope) * 0.08f;
 
         auraNeedle = juce::jlimit (0.0f, 1.0f, peakEnvelope);
 
@@ -196,71 +233,8 @@ public:
 
         g.setColour (juce::Colour (0xff000000));
         g.setFont (juce::FontOptions (26.0f, juce::Font::bold));
-        g.drawText ("SUENAMEJOR - INADOR", 36, 25, 300, 32, juce::Justification::centredLeft);
+        g.drawText ("SUENAMEJOR - INADOR", 36, 22, getWidth() - 72, 32, juce::Justification::centredLeft);
 
-        // --- MEDIDOR AURA 3D ---
-        auto vuRect = juce::Rectangle<float> ((float)getWidth() - 170.0f, 16.0f, 140.0f, 52.0f);
-        
-        juce::ColourGradient bezelGrad (juce::Colour (0xffffffff), vuRect.getX(), vuRect.getY(),
-                                        juce::Colour (0xff777777), vuRect.getX(), vuRect.getBottom(), false);
-        g.setGradientFill (bezelGrad);
-        g.fillRoundedRectangle (vuRect, 4.0f);
-
-        auto innerVu = vuRect.reduced (3.0f);
-        
-        juce::ColourGradient dialGrad (juce::Colour (0xfff9f2e3), innerVu.getX(), innerVu.getY(),
-                                       juce::Colour (0xffe5d2ac), innerVu.getX(), innerVu.getBottom(), false);
-        g.setGradientFill (dialGrad);
-        g.fillRoundedRectangle (innerVu, 3.0f);
-
-        g.setColour (juce::Colour (0x77000000));
-        g.drawRoundedRectangle (innerVu, 3.0f, 1.5f);
-        g.setColour (juce::Colour (0x33000000));
-        g.drawRoundedRectangle (innerVu.reduced (1.0f), 3.0f, 0.5f);
-
-        g.setColour (juce::Colour (0xff000000));
-        g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
-        g.drawText ("AURA", innerVu.withTrimmedTop(3.0f), juce::Justification::top);
-        
-        g.setFont (juce::FontOptions (9.0f, juce::Font::bold));
-        g.drawText ("0", innerVu.getX() + 6, innerVu.getBottom() - 16, 20, 10, juce::Justification::left);
-        g.drawText ("100", innerVu.getRight() - 26, innerVu.getBottom() - 16, 20, 10, juce::Justification::right);
-
-        juce::Path arc;
-        float pivotX = innerVu.getCentreX();
-        float pivotY = innerVu.getBottom() + 10.0f;
-        float radius = 38.0f;
-        float startAngle = -0.75f;
-        float endAngle = 0.75f;
-        arc.addCentredArc (pivotX, pivotY, radius, radius, 0.0f, startAngle, endAngle, true);
-        g.strokePath (arc, juce::PathStrokeType (1.0f));
-
-        float needleAngle = startAngle + auraNeedle * (endAngle - startAngle);
-        juce::Path needle;
-        needle.startNewSubPath (pivotX, pivotY);
-        needle.lineTo (pivotX - 1.2f, pivotY);
-        needle.lineTo (pivotX, pivotY - radius - 4.0f);
-        needle.lineTo (pivotX + 1.2f, pivotY);
-        needle.closeSubPath();
-        needle.applyTransform (juce::AffineTransform::rotation (needleAngle, pivotX, pivotY));
-
-        g.setColour (juce::Colour (0x55000000));
-        juce::Path needleShadow = needle;
-        needleShadow.applyTransform (juce::AffineTransform::translation (1.5f, 1.5f));
-        g.fillPath (needleShadow);
-
-        g.setColour (juce::Colour (0xffcc0000));
-        g.fillPath (needle);
-
-        juce::Path glassReflect;
-        glassReflect.addRoundedRectangle (innerVu.getX(), innerVu.getY(), innerVu.getWidth(), innerVu.getHeight() * 0.45f, 3.0f, 3.0f, false, false, false, false);
-        juce::ColourGradient glassGrad (juce::Colour (0x77ffffff), innerVu.getX(), innerVu.getY(),
-                                        juce::Colour (0x00ffffff), innerVu.getX(), innerVu.getY() + innerVu.getHeight() * 0.45f, false);
-        g.setGradientFill (glassGrad);
-        g.fillPath (glassReflect);
-
-
-        // --- TICKS NEGROS OPACOS ---
         auto drawTicks = [&g](float cx, float cy, float rad) {
             g.setColour (juce::Colour (0xff000000)); 
             for (int i = 0; i <= 10; ++i)
@@ -274,16 +248,17 @@ public:
             }
         };
 
-        // --- TEXTOS EN NEGRO ABSOLUTO GRUESO ---
         g.setColour (juce::Colour (0xff000000)); 
         g.setFont (juce::FontOptions (14.0f, juce::Font::bold));
 
+        // Punche (1 a 67)
         drawTicks (68.0f, 138.0f, 34.0f);
         g.drawText ("PUNCHE", 18, 68, 100, 18, juce::Justification::centred);
         g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
         g.drawText ("1", 22, 182, 18, 16, juce::Justification::centred);
         g.drawText ("67", 96, 182, 26, 16, juce::Justification::centred);
 
+        // Efecto (POP a INDIE)
         drawTicks ((float)getWidth() - 68.0f, 138.0f, 34.0f);
         g.setFont (juce::FontOptions (14.0f, juce::Font::bold));
         g.drawText ("EFECTO", getWidth() - 118, 68, 100, 18, juce::Justification::centred);
@@ -291,6 +266,7 @@ public:
         g.drawText ("POP", getWidth() - 130, 182, 36, 16, juce::Justification::centred);
         g.drawText ("INDIE", getWidth() - 54, 182, 42, 16, juce::Justification::centred);
 
+        // Armonía (0 a MAX)
         drawTicks (68.0f, 274.0f, 34.0f);
         g.setFont (juce::FontOptions (14.0f, juce::Font::bold));
         g.drawText ("ARMONIA", 18, 204, 100, 18, juce::Justification::centred);
@@ -298,6 +274,7 @@ public:
         g.drawText ("0", 22, 318, 18, 16, juce::Justification::centred);
         g.drawText ("MAX", 96, 318, 30, 16, juce::Justification::centred);
 
+        // Mezcla (0 a 100)
         drawTicks ((float)getWidth() - 68.0f, 274.0f, 34.0f);
         g.setFont (juce::FontOptions (14.0f, juce::Font::bold));
         g.drawText ("MEZCLA", getWidth() - 118, 204, 100, 18, juce::Justification::centred);
@@ -305,14 +282,15 @@ public:
         g.drawText ("0", getWidth() - 118, 318, 18, 16, juce::Justification::centred);
         g.drawText ("100", getWidth() - 48, 318, 26, 16, juce::Justification::centred);
 
-        g.setFont (juce::FontOptions (14.0f, juce::Font::bold));
-        g.drawText ("SAZON", getWidth() / 2 - 50, 362, 100, 18, juce::Justification::centred);
+        // Sazón (más corto y centrado)
+        g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
+        g.drawText ("SAZON", getWidth() / 2 - 40, 342, 80, 16, juce::Justification::centred);
         g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
-        g.drawText ("1", 160, 388, 20, 18, juce::Justification::centred);
-        g.drawText ("420", getWidth() - 180, 388, 28, 18, juce::Justification::centred);
+        g.drawText ("1", getWidth() / 2 - 128, 364, 16, 18, juce::Justification::centred);
+        g.drawText ("420", getWidth() / 2 + 112, 364, 28, 18, juce::Justification::centred);
 
         // --- PANTALLA DEL REACTOR ---
-        auto screenRect = juce::Rectangle<float> (136.0f, 76.0f, (float)getWidth() - 272.0f, 252.0f);
+        auto screenRect = juce::Rectangle<float> (136.0f, 76.0f, (float)getWidth() - 272.0f, 248.0f);
         g.setColour (juce::Colour (0xff0e1014));
         g.fillRoundedRectangle (screenRect, 9.0f);
 
@@ -345,7 +323,6 @@ public:
         float armoniaVal = (float)sliderArmonia.getValue();
         float mezclaVal = (float)sliderMezcla.getValue();
 
-        // Expansión horizontal inicial mayor (40% de ancho en 0, 100% en 1)
         float spreadFactor = 0.40f + efectoVal * 0.60f;
         float activeWidth = innerScreen.getWidth() * spreadFactor;
         float startX = innerScreen.getCentreX() - (activeWidth / 2.0f);
@@ -359,8 +336,6 @@ public:
         for (int i = 0; i < AudioPluginAudioProcessor::scopeSize; ++i)
         {
             float rawLevel = audioProcessor.scopeData[i];
-            
-            // Empieza notoriamente más alto desde el comienzo (0.35f multiplicador base)
             float dynamicLevel = rawLevel * (0.35f + puncheNorm * 1.5f);
 
             if (armoniaVal > 0.01f)
@@ -393,10 +368,131 @@ public:
         g.setGradientFill (fillGrad);
         g.fillPath (fillPath);
 
-        // Grosor Invertido: Grueso y redondo (4.5px) al inicio, fino y preciso (1.5px) con el Punche a tope.
         float strokeThickness = 4.5f - (puncheNorm * 3.0f);
         g.setColour (coreColor.brighter (0.4f).withAlpha (0.95f));
         g.strokePath (spectrumPath, juce::PathStrokeType (strokeThickness, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+
+        // =========================================================================
+        // --- MEDIDOR AURA 3D CON TEXTURA DE PAPEL VINTAGE Y RELIEVE ---
+        // =========================================================================
+        auto vuRect = juce::Rectangle<float> ((float)getWidth() / 2.0f - 110.0f, 428.0f, 220.0f, 86.0f);
+        
+        juce::ColourGradient bezelGrad (juce::Colour (0xffffffff), vuRect.getX(), vuRect.getY(),
+                                        juce::Colour (0xff666a72), vuRect.getX(), vuRect.getBottom(), false);
+        g.setGradientFill (bezelGrad);
+        g.fillRoundedRectangle (vuRect, 6.0f);
+
+        auto innerVu = vuRect.reduced (3.5f);
+        
+        // Base de tono pergamino vintage
+        juce::ColourGradient dialGrad (juce::Colour (0xfffaf3e5), innerVu.getX(), innerVu.getY(),
+                                       juce::Colour (0xffe5d3ab), innerVu.getX(), innerVu.getBottom(), false);
+        g.setGradientFill (dialGrad);
+        g.fillRoundedRectangle (innerVu, 4.0f);
+
+        // --- TEXTURA MICROESTRIADA DEL DIAL (PAPEL ENVEJECIDO) ---
+        g.setColour (juce::Colour (0x0d000000));
+        for (float ly = innerVu.getY(); ly < innerVu.getBottom(); ly += 2.0f)
+            g.drawHorizontalLine ((int)ly, innerVu.getX(), innerVu.getRight());
+
+        // Halo de viñeteado en los bordes del medidor
+        juce::ColourGradient vignette (juce::Colour (0x00000000), innerVu.getCentreX(), innerVu.getCentreY(),
+                                       juce::Colour (0x33442200), innerVu.getX(), innerVu.getY(), true);
+        g.setGradientFill (vignette);
+        g.fillRoundedRectangle (innerVu, 4.0f);
+
+        // Sombras de profundidad
+        g.setColour (juce::Colour (0x66000000));
+        g.drawRoundedRectangle (innerVu, 4.0f, 1.5f);
+        g.setColour (juce::Colour (0x25000000));
+        g.drawRoundedRectangle (innerVu.reduced (1.0f), 4.0f, 0.5f);
+
+        // Rótulo AURA
+        g.setColour (juce::Colour (0xff000000));
+        g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
+        g.drawText ("AURA", innerVu.withTrimmedTop (4.0f), juce::Justification::centredTop);
+
+        // Escala
+        g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
+        g.drawText ("0", innerVu.getX() + 10, innerVu.getBottom() - 20, 20, 14, juce::Justification::left);
+        g.drawText ("50", innerVu.getCentreX() - 12, innerVu.getY() + 24, 24, 14, juce::Justification::centred);
+        g.drawText ("100", innerVu.getRight() - 32, innerVu.getBottom() - 20, 24, 14, juce::Justification::right);
+
+        float pivotX = innerVu.getCentreX();
+        float pivotY = innerVu.getBottom() + 16.0f;
+        float radius = 62.0f;
+        float startAngle = -0.72f;
+        float endAngle = 0.72f;
+
+        // Banda coloreada del arco de fondo (amarillo a rojo clásico de saturación)
+        juce::Path arcWarm;
+        arcWarm.addCentredArc (pivotX, pivotY, radius + 2.0f, radius + 2.0f, 0.0f, startAngle + 0.75f * (endAngle - startAngle), endAngle, true);
+        g.setColour (juce::Colour (0xddcc1100));
+        g.strokePath (arcWarm, juce::PathStrokeType (3.0f));
+
+        juce::Path arc;
+        arc.addCentredArc (pivotX, pivotY, radius, radius, 0.0f, startAngle, endAngle, true);
+        g.setColour (juce::Colour (0xff000000));
+        g.strokePath (arc, juce::PathStrokeType (1.2f));
+
+        // Ticks de medición graduados
+        for (int i = 0; i <= 20; ++i)
+        {
+            float frac = (float)i / 20.0f;
+            float tickAngle = startAngle + frac * (endAngle - startAngle);
+            bool isMajor = (i % 5 == 0);
+            
+            float tickLen = isMajor ? 7.0f : 4.0f;
+            float tickThick = isMajor ? 1.6f : 1.0f;
+
+            if (i >= 16)
+                g.setColour (juce::Colour (0xffcc1100));
+            else
+                g.setColour (juce::Colour (0xff000000));
+
+            float cosA = std::sin (tickAngle);
+            float sinA = -std::cos (tickAngle);
+
+            float x1 = pivotX + cosA * radius;
+            float y1 = pivotY + sinA * radius;
+            float x2 = pivotX + cosA * (radius + tickLen);
+            float y2 = pivotY + sinA * (radius + tickLen);
+
+            g.drawLine (x1, y1, x2, y2, tickThick);
+        }
+
+        // Aguja analógica
+        float needleAngle = startAngle + auraNeedle * (endAngle - startAngle);
+        juce::Path needle;
+        needle.startNewSubPath (pivotX, pivotY);
+        needle.lineTo (pivotX - 1.5f, pivotY);
+        needle.lineTo (pivotX, pivotY - radius - 5.0f);
+        needle.lineTo (pivotX + 1.5f, pivotY);
+        needle.closeSubPath();
+        needle.applyTransform (juce::AffineTransform::rotation (needleAngle, pivotX, pivotY));
+
+        // Sombra de aguja
+        g.setColour (juce::Colour (0x45000000));
+        juce::Path needleShadow = needle;
+        needleShadow.applyTransform (juce::AffineTransform::translation (2.0f, 2.0f));
+        g.fillPath (needleShadow);
+
+        // Aguja roja
+        g.setColour (juce::Colour (0xffd90d00));
+        g.fillPath (needle);
+
+        // Pivote
+        g.setColour (juce::Colour (0xff22252a));
+        g.fillEllipse (pivotX - 4.5f, pivotY - 4.5f, 9.0f, 9.0f);
+
+        // Reflejo curvo del cristal
+        juce::Path glassReflect;
+        glassReflect.addRoundedRectangle (innerVu.getX(), innerVu.getY(), innerVu.getWidth(), innerVu.getHeight() * 0.46f, 4.0f, 4.0f, false, false, false, false);
+        juce::ColourGradient glassGrad (juce::Colour (0x60ffffff), innerVu.getX(), innerVu.getY(),
+                                        juce::Colour (0x00ffffff), innerVu.getX(), innerVu.getY() + innerVu.getHeight() * 0.46f, false);
+        g.setGradientFill (glassGrad);
+        g.fillPath (glassReflect);
     }
 
     void resized() override
@@ -406,8 +502,11 @@ public:
         sliderArmonia.setBounds (36, 242, 64, 64);
         sliderMezcla.setBounds (getWidth() - 100, 242, 64, 64);
 
-        sliderSazon.setBounds (180, 384, getWidth() - 360, 26);
-        btnClaveSol.setBounds (getWidth() / 2 - 80, 436, 160, 36);
+        // Slider de Sazón más corto y centrado (200px de longitud)
+        sliderSazon.setBounds (getWidth() / 2 - 100, 362, 200, 24);
+
+        // Interruptor Clave de Sol
+        btnClaveSol.setBounds (getWidth() - 165, 452, 130, 36);
     }
 
 private:
