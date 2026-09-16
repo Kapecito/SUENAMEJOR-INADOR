@@ -146,14 +146,14 @@ public:
 
         drawTicks (85.0f, 255.0f, 42.0f);
         g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-        g.drawText ("ARMON\xc3\x8da", 35, 195, 100, 20, juce::Justification::centred);
+        g.drawText ("ARMONIA", 35, 195, 100, 20, juce::Justification::centred);
 
         drawTicks ((float)getWidth() - 85.0f, 255.0f, 42.0f);
         g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
         g.drawText ("MEZCLA", getWidth() - 135, 195, 100, 20, juce::Justification::centred);
 
         g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-        g.drawText ("SAZ\xc3\x93N", getWidth() / 2 - 50, 345, 100, 20, juce::Justification::centred);
+        g.drawText ("SAZON", getWidth() / 2 - 50, 345, 100, 20, juce::Justification::centred);
         g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
         g.drawText ("1", 175, 370, 20, 20, juce::Justification::centred);
         g.drawText ("420", getWidth() - 195, 370, 30, 20, juce::Justification::centred);
