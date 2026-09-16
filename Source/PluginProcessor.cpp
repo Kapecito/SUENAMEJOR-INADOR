@@ -7,7 +7,6 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
        forwardFFT (fftOrder),
        window (fftSize, juce::dsp::WindowingFunction<float>::hann)
 {
-    // Punche de 1 a 67 iniciando en 1; Efecto de 0.0 (POP) a 1.0 (INDIE) iniciando en 0.0
     addParameter (paramPunche  = new juce::AudioParameterFloat ("punche",  "Punche",  1.0f, 67.0f, 1.0f));
     addParameter (paramEfecto  = new juce::AudioParameterFloat ("efecto",  "Efecto",  0.0f, 1.0f, 0.0f));
     addParameter (paramArmonia = new juce::AudioParameterFloat ("armonia", "Armonia", 0.0f, 1.0f, 0.0f));
@@ -85,11 +84,14 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     auto* rightChannel = buffer.getNumChannels() > 1 ? buffer.getReadPointer (1) : leftChannel;
     int numSamples = buffer.getNumSamples();
 
+    float peak = 0.0f;
     for (int i = 0; i < numSamples; ++i)
     {
         float monoSample = 0.5f * (leftChannel[i] + rightChannel[i]);
+        peak = juce::jmax (peak, std::abs (monoSample));
         pushNextSampleIntoFifo (monoSample);
     }
+    currentAudioLevel.store (peak);
 }
 
 bool AudioPluginAudioProcessor::hasEditor() const { return true; }

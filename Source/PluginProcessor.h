@@ -32,9 +32,9 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     // Motor FFT
-    static constexpr auto fftOrder = 11;             // 2048 puntos de resolución
+    static constexpr auto fftOrder = 11;
     static constexpr auto fftSize = 1 << fftOrder;
-    static constexpr auto scopeSize = 256;           // Puntos en pantalla
+    static constexpr auto scopeSize = 256;
 
     void pushNextSampleIntoFifo (float sample) noexcept;
     void drawNextFrameOfSpectrum();
@@ -44,6 +44,9 @@ public:
     int fifoIndex = 0;
     bool nextFFTBlockReady = false;
     float scopeData[scopeSize];
+    
+    // Nivel de audio en tiempo real para la aguja de Aura
+    std::atomic<float> currentAudioLevel { 0.0f };
 
     juce::AudioParameterFloat* paramPunche;
     juce::AudioParameterFloat* paramEfecto;
