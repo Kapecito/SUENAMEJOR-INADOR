@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
 project(SUENAMEJOR_INADOR VERSION 1.0.0)
 
+# Enlazar C++ Runtime estáticamente para que no dependa de DLLs externas en Windows
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
 include(FetchContent)
 FetchContent_Declare(
     JUCE
@@ -19,11 +22,9 @@ juce_add_plugin(SUENAMEJOR_INADOR
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
+    VST3_CATEGORIES "Fx" "Distortion"
     COPY_PLUGIN_AFTER_BUILD FALSE
 )
-
-# Genera JuceHeader.h automáticamente para los archivos C++
-juce_generate_juce_header(SUENAMEJOR_INADOR)
 
 target_sources(SUENAMEJOR_INADOR
     PRIVATE
