@@ -3,7 +3,9 @@
 
 AudioPluginAudioProcessor::AudioPluginAudioProcessor()
      : AudioProcessor (BusesProperties().withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                                       .withOutput ("Output", juce::AudioChannelSet::stereo(), true))
+                                       .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+       forwardFFT (fftOrder),
+       window (fftSize, juce::dsp::WindowingFunction<float>::hann)
 {
     addParameter (paramPunche = new juce::AudioParameterFloat ("punche", "Punche", 1.0f, 67.0f, 33.0f));
     addParameter (paramEfecto = new juce::AudioParameterFloat ("efecto", "Efecto", 0.0f, 1.0f, 0.5f));
@@ -12,7 +14,9 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
     addParameter (paramSazon = new juce::AudioParameterFloat ("sazon", "Sazon", 1.0f, 420.0f, 210.0f));
     addParameter (paramClaveSol = new juce::AudioParameterBool ("clavesol", "Clave de sol", false));
 
-    std::fill (std::begin (scopeBuffer), std::end (scopeBuffer), 0.0f);
+    std::fill (std::begin (fifo), std::end (fifo), 0.0f);
+    std::fill (std::begin (fftData), std::end (fftData), 0.0f);
+    std::fill (std::begin (scopeData), std::end (scopeData), 0.0f);
 }
 
 AudioPluginAudioProcessor::~AudioPluginAudioProcessor() {}
@@ -38,19 +42,55 @@ bool AudioPluginAudioProcessor::isBusesLayoutSupported (const BusesLayout& layou
     return (layouts.getMainOutputChannelSet() == layouts.getMainInputChannelSet());
 }
 
+void AudioPluginAudioProcessor::pushNextSampleIntoFifo (float sample) noexcept
+{
+    if (fifoIndex == fftSize)
+    {
+        if (!nextFFTBlockReady)
+        {
+            std::fill (std::begin (fftData), std::end (fftData), 0.0f);
+            std::copy (fifo, fifo + fftSize, fftData);
+            nextFFTBlockReady = true;
+        }
+        fifoIndex = 0;
+    }
+    fifo[fifoIndex++] = sample;
+}
+
+void AudioPluginAudioProcessor::drawNextFrameOfSpectrum()
+{
+    window.multiplyWithWindowingTable (fftData, fftSize);
+    forwardFFT.performFrequencyOnlyForwardTransform (fftData);
+
+    auto mindB = -80.0f;
+    auto maxdB = 0.0f;
+
+    for (int i = 0; i < scopeSize; ++i)
+    {
+        // Mapeo logarítmico de frecuencias (20 Hz a 20 kHz tipo Pro-Q)
+        auto skewedProportionX = 1.0f - std::exp (std::log (1.0f - (float)i / (float)scopeSize) * 0.2f);
+        auto fftDataIndex = juce::jlimit (0, fftSize / 2, (int)(skewedProportionX * (float)(fftSize / 2)));
+        auto level = juce::jmap (juce::jlimit (mindB, maxdB, juce::Decibels::gainToDecibels (fftData[fftDataIndex]) - juce::Decibels::gainToDecibels ((float)fftSize)),
+                                 mindB, maxdB, 0.0f, 1.0f);
+        
+        // Caída suave (decay tipo Pro-Q)
+        scopeData[i] = juce::jmax (level, scopeData[i] * 0.82f);
+    }
+}
+
 void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
 
-    auto* channelData = buffer.getReadPointer (0);
+    auto* leftChannel = buffer.getReadPointer (0);
+    auto* rightChannel = buffer.getNumChannels() > 1 ? buffer.getReadPointer (1) : leftChannel;
     int numSamples = buffer.getNumSamples();
 
     for (int i = 0; i < numSamples; ++i)
     {
-        scopeBuffer[scopeWritePosition] = channelData[i];
-        scopeWritePosition = (scopeWritePosition + 1) % scopeSize;
+        float monoSample = 0.5f * (leftChannel[i] + rightChannel[i]);
+        pushNextSampleIntoFifo (monoSample);
     }
-    scopeUpdated.store (true);
 }
 
 bool AudioPluginAudioProcessor::hasEditor() const { return true; }

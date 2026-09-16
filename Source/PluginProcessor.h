@@ -1,5 +1,6 @@
 #pragma once
 #include <juce_audio_utils/juce_audio_utils.h>
+#include <juce_dsp/juce_dsp.h>
 
 class AudioPluginAudioProcessor : public juce::AudioProcessor
 {
@@ -30,10 +31,19 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    static constexpr int scopeSize = 256;
-    float scopeBuffer[scopeSize];
-    int scopeWritePosition = 0;
-    std::atomic<bool> scopeUpdated { false };
+    // Motor FFT
+    static constexpr auto fftOrder = 11;             // 2048 puntos de resolución
+    static constexpr auto fftSize = 1 << fftOrder;
+    static constexpr auto scopeSize = 256;           // Puntos en pantalla
+
+    void pushNextSampleIntoFifo (float sample) noexcept;
+    void drawNextFrameOfSpectrum();
+
+    float fifo[fftSize];
+    float fftData[2 * fftSize];
+    int fifoIndex = 0;
+    bool nextFFTBlockReady = false;
+    float scopeData[scopeSize];
 
     juce::AudioParameterFloat* paramPunche;
     juce::AudioParameterFloat* paramEfecto;
@@ -43,5 +53,8 @@ public:
     juce::AudioParameterBool* paramClaveSol;
 
 private:
+    juce::dsp::FFT forwardFFT;
+    juce::dsp::WindowingFunction<float> window;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessor)
 };

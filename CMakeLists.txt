@@ -38,13 +38,10 @@ target_compile_definitions(SUENAMEJOR_INADOR
         JUCE_VST3_CAN_REPLACE_VST2=0
 )
 
-# Enlace estático obligatorio del C++ Runtime en Windows
-set_property(TARGET SUENAMEJOR_INADOR PROPERTY
-    MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-
 target_link_libraries(SUENAMEJOR_INADOR
     PRIVATE
         juce::juce_audio_utils
+        juce::juce_dsp
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags

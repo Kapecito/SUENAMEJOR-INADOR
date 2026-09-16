@@ -2,6 +2,61 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "PluginProcessor.h"
 
+// Botón Switch iluminado completo
+class LitSwitchButton : public juce::Button
+{
+public:
+    LitSwitchButton() : juce::Button ("LitSwitch")
+    {
+        setClickingTogglesState (true);
+    }
+
+    void paintButton (juce::Graphics& g, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override
+    {
+        auto bounds = getLocalBounds().toFloat().reduced (2.0f);
+        bool on = getToggleState();
+
+        // Sombra exterior
+        g.setColour (juce::Colour (0x55000000));
+        g.fillRoundedRectangle (bounds.translated (0.0f, 2.0f), 6.0f);
+
+        // Fondo del switch (iluminado vs apagado)
+        if (on)
+        {
+            // Luz encendida: Gradiente naranja incandescente con borde brillante
+            juce::ColourGradient litGrad (juce::Colour (0xffff9e24), bounds.getCentreX(), bounds.getY(),
+                                         juce::Colour (0xffd85100), bounds.getCentreX(), bounds.getBottom(), false);
+            g.setGradientFill (litGrad);
+            g.fillRoundedRectangle (bounds, 6.0f);
+
+            // Borde resplandor
+            g.setColour (juce::Colour (0xffffe099));
+            g.drawRoundedRectangle (bounds, 6.0f, 2.0f);
+
+            // Texto en bajo relieve oscuro cuando está activo
+            g.setColour (juce::Colour (0xff200b02));
+            g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
+            g.drawText ("CLAVE DE SOL", bounds, juce::Justification::centred);
+        }
+        else
+        {
+            // Luz apagada: Botón metálico/plástico oscuro en relieve
+            juce::ColourGradient offGrad (juce::Colour (0xff4b5059), bounds.getCentreX(), bounds.getY(),
+                                         juce::Colour (0xff2b2e34), bounds.getCentreX(), bounds.getBottom(), false);
+            g.setGradientFill (offGrad);
+            g.fillRoundedRectangle (bounds, 6.0f);
+
+            g.setColour (juce::Colour (0xff686f7c));
+            g.drawRoundedRectangle (bounds, 6.0f, 1.2f);
+
+            // Texto apagado
+            g.setColour (juce::Colour (0xff8d94a0));
+            g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
+            g.drawText ("CLAVE DE SOL", bounds, juce::Justification::centred);
+        }
+    }
+};
+
 class MetalKnobLookAndFeel : public juce::LookAndFeel_V4
 {
 public:
@@ -22,14 +77,14 @@ public:
         g.setGradientFill (knobGrad);
         g.fillEllipse (bounds);
 
-        g.setColour (juce::Colour (0xffffffff).withAlpha (0.6f));
-        g.drawEllipse (bounds, 1.0f);
+        g.setColour (juce::Colour (0xffffffff).withAlpha (0.7f));
+        g.drawEllipse (bounds, 1.2f);
 
         juce::Path p;
         auto pointerLength = radius * 0.75f;
-        p.addRectangle (-1.5f, -radius, 3.0f, pointerLength * 0.5f);
+        p.addRectangle (-1.6f, -radius, 3.2f, pointerLength * 0.5f);
         p.applyTransform (juce::AffineTransform::rotation (toAngle).translated (center.x, center.y));
-        g.setColour (juce::Colour (0xff202226));
+        g.setColour (juce::Colour (0xff111215));
         g.fillPath (p);
     }
 };
@@ -41,7 +96,7 @@ public:
     AudioPluginAudioProcessorEditor (AudioPluginAudioProcessor& p)
         : AudioProcessorEditor (&p), audioProcessor (p)
     {
-        setSize (640, 480);
+        setSize (680, 500);
         setLookAndFeel (&metalLook);
 
         auto setupKnob = [this](juce::Slider& s) {
@@ -77,8 +132,6 @@ public:
         sliderSazon.onValueChange = [this] { *audioProcessor.paramSazon = (float)sliderSazon.getValue(); };
         addAndMakeVisible (sliderSazon);
 
-        btnClaveSol.setButtonText ("CLAVE DE SOL");
-        btnClaveSol.setClickingTogglesState (true);
         btnClaveSol.setToggleState (*audioProcessor.paramClaveSol, juce::dontSendNotification);
         btnClaveSol.onClick = [this] {
             *audioProcessor.paramClaveSol = btnClaveSol.getToggleState();
@@ -86,7 +139,6 @@ public:
         };
         addAndMakeVisible (btnClaveSol);
 
-        std::fill (std::begin (scopeData), std::end (scopeData), 0.0f);
         startTimerHz (30);
     }
 
@@ -98,124 +150,171 @@ public:
 
     void timerCallback() override
     {
-        if (audioProcessor.scopeUpdated.exchange (false))
+        if (audioProcessor.nextFFTBlockReady)
         {
+            audioProcessor.drawNextFrameOfSpectrum();
+            audioProcessor.nextFFTBlockReady = false;
+            repaint();
+        }
+        else
+        {
+            // Mantiene el decaimiento visual suave continuo
             for (int i = 0; i < AudioPluginAudioProcessor::scopeSize; ++i)
-                scopeData[i] = audioProcessor.scopeBuffer[i];
+                audioProcessor.scopeData[i] *= 0.93f;
             repaint();
         }
     }
 
     void paint (juce::Graphics& g) override
     {
-        juce::ColourGradient metalBase (juce::Colour (0xffd2d7e0), 0, 0,
-                                        juce::Colour (0xffbac0cc), (float)getWidth(), (float)getHeight(), false);
+        // Placa metálica satinada
+        juce::ColourGradient metalBase (juce::Colour (0xffd6dbe3), 0, 0,
+                                        juce::Colour (0xffb8bfc9), (float)getWidth(), (float)getHeight(), false);
         g.setGradientFill (metalBase);
         g.fillAll();
 
-        g.setColour (juce::Colour (0xff32353b));
-        g.setFont (juce::FontOptions (24.0f, juce::Font::bold));
-        g.drawText ("SUENAMEJOR - INADOR", 30, 20, getWidth() - 60, 30, juce::Justification::centredLeft);
+        // Título superior en negrita negra
+        g.setColour (juce::Colour (0xff111215));
+        g.setFont (juce::FontOptions (26.0f, juce::Font::bold));
+        g.drawText ("SUENAMEJOR - INADOR", 35, 18, getWidth() - 70, 32, juce::Justification::centredLeft);
 
         auto drawTicks = [&g](float cx, float cy, float radius) {
-            g.setColour (juce::Colour (0x6632353b));
+            g.setColour (juce::Colour (0x66111215));
             for (int i = 0; i <= 10; ++i)
             {
                 float angle = juce::MathConstants<float>::pi * 0.75f + (float)i / 10.0f * (juce::MathConstants<float>::pi * 1.5f);
-                float x1 = cx + std::cos (angle) * (radius + 2.0f);
-                float y1 = cy + std::sin (angle) * (radius + 2.0f);
-                float x2 = cx + std::cos (angle) * (radius + 7.0f);
-                float y2 = cy + std::sin (angle) * (radius + 7.0f);
-                g.drawLine (x1, y1, x2, y2, 1.2f);
+                float x1 = cx + std::cos (angle) * (radius + 3.0f);
+                float y1 = cy + std::sin (angle) * (radius + 3.0f);
+                float x2 = cx + std::cos (angle) * (radius + 8.0f);
+                float y2 = cy + std::sin (angle) * (radius + 8.0f);
+                g.drawLine (x1, y1, x2, y2, 1.4f);
             }
         };
 
-        drawTicks (85.0f, 130.0f, 42.0f);
-        g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-        g.drawText ("PUNCHE", 35, 70, 100, 20, juce::Justification::centred);
-        g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
-        g.drawText ("1", 38, 170, 20, 20, juce::Justification::centred);
-        g.drawText ("67", 112, 170, 25, 20, juce::Justification::centred);
+        // --- ETIQUETAS Y MARCAS (Negro puro, fuente gruesa y con espacio libre de los ticks) ---
+        g.setColour (juce::Colour (0xff000000));
+        g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
 
-        drawTicks ((float)getWidth() - 85.0f, 130.0f, 42.0f);
-        g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-        g.drawText ("EFECTO", getWidth() - 135, 70, 100, 20, juce::Justification::centred);
-        g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
-        g.drawText ("POP", getWidth() - 145, 170, 30, 20, juce::Justification::centred);
-        g.drawText ("INDIE", getWidth() - 60, 170, 35, 20, juce::Justification::centred);
+        // Punche
+        drawTicks (85.0f, 135.0f, 40.0f);
+        g.drawText ("PUNCHE", 30, 68, 110, 18, juce::Justification::centred);
+        g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
+        g.drawText ("1", 34, 182, 22, 16, juce::Justification::centred);
+        g.drawText ("67", 114, 182, 26, 16, juce::Justification::centred);
 
-        drawTicks (85.0f, 255.0f, 42.0f);
-        g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-        g.drawText ("ARMONIA", 35, 195, 100, 20, juce::Justification::centred);
+        // Efecto
+        drawTicks ((float)getWidth() - 85.0f, 135.0f, 40.0f);
+        g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
+        g.drawText ("EFECTO", getWidth() - 140, 68, 110, 18, juce::Justification::centred);
+        g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
+        g.drawText ("POP", getWidth() - 148, 182, 34, 16, juce::Justification::centred);
+        g.drawText ("INDIE", getWidth() - 66, 182, 40, 16, juce::Justification::centred);
 
-        drawTicks ((float)getWidth() - 85.0f, 255.0f, 42.0f);
-        g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-        g.drawText ("MEZCLA", getWidth() - 135, 195, 100, 20, juce::Justification::centred);
+        // Armonía
+        drawTicks (85.0f, 265.0f, 40.0f);
+        g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
+        g.drawText ("ARMONIA", 30, 198, 110, 18, juce::Justification::centred);
 
-        g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-        g.drawText ("SAZON", getWidth() / 2 - 50, 345, 100, 20, juce::Justification::centred);
-        g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
-        g.drawText ("1", 175, 370, 20, 20, juce::Justification::centred);
-        g.drawText ("420", getWidth() - 195, 370, 30, 20, juce::Justification::centred);
+        // Mezcla
+        drawTicks ((float)getWidth() - 85.0f, 265.0f, 40.0f);
+        g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
+        g.drawText ("MEZCLA", getWidth() - 140, 198, 110, 18, juce::Justification::centred);
 
-        auto screenRect = juce::Rectangle<float> (160.0f, 75.0f, (float)getWidth() - 320.0f, 230.0f);
-        g.setColour (juce::Colour (0xff181a20));
+        // Sazón
+        g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
+        g.drawText ("SAZON", getWidth() / 2 - 50, 346, 100, 18, juce::Justification::centred);
+        g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
+        g.drawText ("1", 170, 372, 22, 18, juce::Justification::centred);
+        g.drawText ("420", getWidth() - 192, 372, 32, 18, juce::Justification::centred);
+
+        // --- PANTALLA CENTRAL OLED ESTILO FABFILTER PRO-Q 3 ---
+        auto screenRect = juce::Rectangle<float> (165.0f, 75.0f, (float)getWidth() - 330.0f, 235.0f);
+        
+        // Marco de la pantalla
+        g.setColour (juce::Colour (0xff121417));
         g.fillRoundedRectangle (screenRect, 8.0f);
 
-        float sazonNorm = (float)(sliderSazon.getValue() - 1.0) / 419.0f;
-        juce::Colour colorFrio (0xff3b1654);
-        juce::Colour colorCalido (0xffb8440d);
-        auto fondoColor = colorFrio.interpolatedWith (colorCalido, sazonNorm);
+        auto innerScreen = screenRect.reduced (3.0f);
+        juce::ColourGradient screenBg (juce::Colour (0xff0f121a), innerScreen.getX(), innerScreen.getY(),
+                                       juce::Colour (0xff07080c), innerScreen.getX(), innerScreen.getBottom(), false);
+        g.setGradientFill (screenBg);
+        g.fillRoundedRectangle (innerScreen, 6.0f);
 
-        juce::ColourGradient screenGrad (fondoColor.withAlpha (0.4f), screenRect.getX(), screenRect.getY(),
-                                         fondoColor.withAlpha (0.9f), screenRect.getX(), screenRect.getBottom(), false);
-        g.setGradientFill (screenGrad);
-        g.fillRoundedRectangle (screenRect.reduced (3.0f), 6.0f);
+        // Rejilla sutil de decibeles/frecuencias
+        g.setColour (juce::Colour (0x1affffff));
+        for (int row = 1; row <= 3; ++row)
+        {
+            float yGrid = innerScreen.getY() + (innerScreen.getHeight() / 4.0f) * (float)row;
+            g.drawLine (innerScreen.getX(), yGrid, innerScreen.getRight(), yGrid, 1.0f);
+        }
+        for (int col = 1; col <= 4; ++col)
+        {
+            float xGrid = innerScreen.getX() + (innerScreen.getWidth() / 5.0f) * (float)col;
+            g.drawLine (xGrid, innerScreen.getY(), xGrid, innerScreen.getBottom(), 1.0f);
+        }
 
-        float puncheVal = (float)sliderPunche.getValue();
-        float efectoVal = (float)sliderEfecto.getValue();
-        float armoniaVal = (float)sliderArmonia.getValue();
-        float mezclaVal = (float)sliderMezcla.getValue();
+        // Construcción de la curva de espectro FFT
+        juce::Path spectrumPath;
+        juce::Path fillPath;
 
-        juce::Path wavePath;
-        float midY = screenRect.getCentreY();
-        float step = screenRect.getWidth() / (float)AudioPluginAudioProcessor::scopeSize;
+        float width = innerScreen.getWidth();
+        float height = innerScreen.getHeight();
+        float bottomY = innerScreen.getBottom();
+
+        fillPath.startNewSubPath (innerScreen.getX(), bottomY);
 
         for (int i = 0; i < AudioPluginAudioProcessor::scopeSize; ++i)
         {
-            float rawSample = scopeData[i];
-            float processedSample = std::tanh (rawSample * (1.0f + (puncheVal / 67.0f) * 4.0f));
-            processedSample += std::sin ((float)i * 0.4f) * 0.15f * armoniaVal;
-            processedSample *= (1.0f + (efectoVal - 0.5f) * 0.5f);
+            float level = audioProcessor.scopeData[i];
+            
+            // Alteración dinámica con los parámetros del usuario
+            float puncheBoost = ((float)sliderPunche.getValue() / 67.0f) * 0.25f;
+            level = juce::jlimit (0.0f, 1.0f, level * (1.0f + puncheBoost));
 
-            float finalSample = rawSample + (processedSample - rawSample) * mezclaVal;
+            float x = innerScreen.getX() + ((float)i / (float)(AudioPluginAudioProcessor::scopeSize - 1)) * width;
+            float y = bottomY - (level * height * 0.92f);
 
-            float x = screenRect.getX() + (float)i * step;
-            float y = midY - finalSample * (screenRect.getHeight() * 0.42f);
-
-            if (i == 0) wavePath.startNewSubPath (x, y);
-            else        wavePath.lineTo (x, y);
+            if (i == 0)
+            {
+                spectrumPath.startNewSubPath (x, y);
+            }
+            else
+            {
+                spectrumPath.lineTo (x, y);
+            }
+            fillPath.lineTo (x, y);
         }
 
-        g.setColour (juce::Colour (0xffffffff).withAlpha (0.9f));
-        g.strokePath (wavePath, juce::PathStrokeType (1.8f));
+        fillPath.lineTo (innerScreen.getRight(), bottomY);
+        fillPath.closeSubPath();
 
-        if (btnClaveSol.getToggleState())
-        {
-            g.setColour (juce::Colour (0xffff8c00));
-            g.fillEllipse ((float)getWidth() / 2.0f - 4.0f, 460.0f, 8.0f, 8.0f);
-        }
+        // Relleno degradado translúcido bajo la curva tipo Pro-Q 3
+        float sazonNorm = (float)(sliderSazon.getValue() - 1.0) / 419.0f;
+        juce::Colour gradTop = juce::Colour (0xff00d0ff).interpolatedWith (juce::Colour (0xffff6a00), sazonNorm);
+        juce::Colour gradBottom = juce::Colour (0xff002b4d).interpolatedWith (juce::Colour (0xff470f00), sazonNorm);
+
+        juce::ColourGradient fillGrad (gradTop.withAlpha (0.42f), innerScreen.getX(), innerScreen.getY(),
+                                      gradBottom.withAlpha (0.05f), innerScreen.getX(), bottomY, false);
+        g.setGradientFill (fillGrad);
+        g.fillPath (fillPath);
+
+        // Trazo de línea brillante superior neón
+        juce::Colour lineGlow = juce::Colour (0xff4de3ff).interpolatedWith (juce::Colour (0xffffa834), sazonNorm);
+        g.setColour (lineGlow.withAlpha (0.95f));
+        g.strokePath (spectrumPath, juce::PathStrokeType (2.0f, juce::PathStrokeType::curved));
     }
 
     void resized() override
     {
-        sliderPunche.setBounds (45, 90, 80, 80);
-        sliderEfecto.setBounds (getWidth() - 125, 90, 80, 80);
-        sliderArmonia.setBounds (45, 215, 80, 80);
-        sliderMezcla.setBounds (getWidth() - 125, 215, 80, 80);
+        sliderPunche.setBounds (45, 95, 80, 80);
+        sliderEfecto.setBounds (getWidth() - 125, 95, 80, 80);
+        sliderArmonia.setBounds (45, 225, 80, 80);
+        sliderMezcla.setBounds (getWidth() - 125, 225, 80, 80);
 
-        sliderSazon.setBounds (200, 365, getWidth() - 400, 30);
-        btnClaveSol.setBounds (getWidth() / 2 - 60, 425, 120, 30);
+        sliderSazon.setBounds (195, 368, getWidth() - 390, 28);
+        
+        // Interruptor retroiluminado central
+        btnClaveSol.setBounds (getWidth() / 2 - 80, 425, 160, 36);
     }
 
 private:
@@ -227,9 +326,7 @@ private:
     juce::Slider sliderArmonia;
     juce::Slider sliderMezcla;
     juce::Slider sliderSazon;
-    juce::TextButton btnClaveSol;
-
-    float scopeData[AudioPluginAudioProcessor::scopeSize];
+    LitSwitchButton btnClaveSol;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessorEditor)
 };
