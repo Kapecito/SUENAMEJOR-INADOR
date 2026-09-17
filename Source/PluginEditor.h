@@ -382,11 +382,11 @@ public:
 
 
         // =========================================================================
-        // --- MEDIDOR AURA: VU-meter estándar, más grande y con textura 3D real ---
+        // --- MEDIDOR AURA: layout calculado con espacio real, nunca con "números mágicos" ---
         // =========================================================================
-        auto vuRect = juce::Rectangle<float> ((float)getWidth() / 2.0f - 115.0f, 408.0f, 230.0f, 116.0f);
+        auto vuRect = juce::Rectangle<float> ((float)getWidth() / 2.0f - 120.0f, 400.0f, 240.0f, 132.0f);
 
-        // Bisel metálico con degradado de luz + tornillos en las esquinas
+        // Bisel metálico con tornillos en las esquinas
         juce::ColourGradient bezelGrad (juce::Colour (0xffffffff), vuRect.getX(), vuRect.getY(),
                                         juce::Colour (0xff585c64), vuRect.getX(), vuRect.getBottom(), false);
         g.setGradientFill (bezelGrad);
@@ -411,7 +411,7 @@ public:
 
         auto innerVu = vuRect.reduced (16.0f);
 
-        // --- Cara del dial: base color crema real de VU + textura de metal cepillado ---
+        // Cara del dial: base + textura de metal cepillado (igual que antes)
         juce::ColourGradient dialGrad (juce::Colour (0xfffdf7e8), innerVu.getX(), innerVu.getY(),
                                        juce::Colour (0xffe0cc99), innerVu.getX(), innerVu.getBottom(), false);
         g.setGradientFill (dialGrad);
@@ -423,7 +423,6 @@ public:
             dialClip.addRoundedRectangle (innerVu, 4.0f);
             g.reduceClipRegion (dialClip);
 
-            // Líneas concéntricas de "metal cepillado" alrededor del eje de la aguja
             g.setColour (juce::Colour (0x12000000));
             float brushPivotY = innerVu.getBottom() + 14.0f;
             for (int i = 0; i < 30; ++i)
@@ -437,7 +436,6 @@ public:
                 g.strokePath (brushArc, juce::PathStrokeType (0.6f));
             }
 
-            // Viñeta hacia las esquinas para dar profundidad (efecto 3D)
             juce::ColourGradient vignette (juce::Colour (0x00000000), innerVu.getCentreX(), innerVu.getCentreY(),
                                            juce::Colour (0x35000000), innerVu.getX(), innerVu.getY(), true);
             g.setGradientFill (vignette);
@@ -447,96 +445,128 @@ public:
         g.setColour (juce::Colour (0x80000000));
         g.drawRoundedRectangle (innerVu, 4.0f, 1.6f);
 
-        float pivotX = innerVu.getCentreX();
-        float pivotY = innerVu.getBottom() - 10.0f;
-        float arcRadius = 66.0f;
-        float startAngle = -0.95f;
-        float endAngle = 0.95f;
-
-        // Franja de saturación roja
-        float satStart = startAngle + 0.70f * (endAngle - startAngle);
-        juce::Path arcWarm;
-        arcWarm.addCentredArc (pivotX, pivotY, arcRadius + 3.0f, arcRadius + 3.0f, 0.0f, satStart, endAngle, true);
-        g.setColour (juce::Colour (0xffd63322));
-        g.strokePath (arcWarm, juce::PathStrokeType (5.5f));
-
-        // Arco principal
-        juce::Path arc;
-        arc.addCentredArc (pivotX, pivotY, arcRadius, arcRadius, 0.0f, startAngle, endAngle, true);
-        g.setColour (juce::Colour (0xff000000));
-        g.strokePath (arc, juce::PathStrokeType (1.6f));
-
-        // Ticks de calibración y números, escalados al tamaño nuevo
-        g.setFont (juce::FontOptions (10.5f, juce::Font::bold));
-        for (int i = 0; i <= 20; ++i)
+        // --- A partir de aquí, todo el layout se reparte con espacio medido, no adivinado ---
         {
-            float frac = (float) i / 20.0f;
-            float angle = startAngle + frac * (endAngle - startAngle);
-            bool isMajor = (i % 5 == 0);
+            juce::Graphics::ScopedSaveState gaugeClipState (g);
+            juce::Path gaugeClip;
+            gaugeClip.addRoundedRectangle (innerVu, 4.0f);
+            g.reduceClipRegion (gaugeClip);   // red de seguridad: nada puede dibujarse fuera del cuadro
 
-            float tickLen = isMajor ? 8.0f : 4.5f;
-            float tickThick = isMajor ? 2.0f : 1.0f;
+            auto gaugeArea = innerVu;
 
-            float sinA = std::sin (angle);
-            float cosA = -std::cos (angle);
+            // 1) Reservamos arriba el alto REAL del texto "AURA" (no un valor fijo)
+            juce::Font titleFont (juce::FontOptions (13.0f, juce::Font::bold));
+            auto titleArea = gaugeArea.removeFromTop (titleFont.getHeight() + 4.0f);
+            g.setColour (juce::Colour (0xff000000));
+            g.setFont (titleFont);
+            g.drawText ("AURA", titleArea, juce::Justification::centred);
 
-            float x1 = pivotX + sinA * arcRadius;
-            float y1 = pivotY + cosA * arcRadius;
-            float x2 = pivotX + sinA * (arcRadius + tickLen);
-            float y2 = pivotY + cosA * (arcRadius + tickLen);
+            // 2) Reservamos abajo el espacio del capuchón de la aguja
+            float capRad = juce::jmin (gaugeArea.getWidth(), gaugeArea.getHeight()) * 0.14f;
+            gaugeArea.removeFromBottom (capRad + 4.0f);
+
+            // Lo que queda es exactamente el espacio disponible para el arco + sus etiquetas
+            float pivotX = gaugeArea.getCentreX();
+            float pivotY = gaugeArea.getBottom();
+            float startAngle = -0.95f;
+            float endAngle = 0.95f;
+
+            // 3) El radio del arco se calcula para que, sumando el tick y el ancho/alto REAL
+            //    de las etiquetas ("0","50","100"), todo quepa dentro de gaugeArea.
+            juce::Font labelFont (juce::FontOptions (10.5f, juce::Font::bold));
+            float tickLen = 8.0f;
+            float labelGap = 3.0f;
+
+            float verticalAllowance   = labelFont.getHeight() + tickLen + labelGap;
+            float horizontalHalfLabel = labelFont.getStringWidth ("100") * 0.5f + tickLen + labelGap;
+
+            float maxRadiusVertical   = gaugeArea.getHeight() - verticalAllowance;
+            float maxRadiusHorizontal = (gaugeArea.getWidth() * 0.5f - horizontalHalfLabel) / std::sin (endAngle);
+
+            float arcRadius = juce::jmax (10.0f, juce::jmin (maxRadiusVertical, maxRadiusHorizontal));
+
+            // Franja de saturación roja
+            float satStart = startAngle + 0.70f * (endAngle - startAngle);
+            juce::Path arcWarm;
+            arcWarm.addCentredArc (pivotX, pivotY, arcRadius + 3.0f, arcRadius + 3.0f, 0.0f, satStart, endAngle, true);
+            g.setColour (juce::Colour (0xffd63322));
+            g.strokePath (arcWarm, juce::PathStrokeType (5.0f));
+
+            // Arco principal
+            juce::Path arc;
+            arc.addCentredArc (pivotX, pivotY, arcRadius, arcRadius, 0.0f, startAngle, endAngle, true);
+            g.setColour (juce::Colour (0xff000000));
+            g.strokePath (arc, juce::PathStrokeType (1.6f));
+
+            // Ticks y etiquetas, con caja de texto medida en base al string real (no un tamaño fijo)
+            g.setFont (labelFont);
+            for (int i = 0; i <= 20; ++i)
+            {
+                float frac = (float) i / 20.0f;
+                float angle = startAngle + frac * (endAngle - startAngle);
+                bool isMajor = (i % 5 == 0);
+
+                float tLen = isMajor ? tickLen : tickLen * 0.55f;
+                float tThick = isMajor ? 2.0f : 1.0f;
+
+                float sinA = std::sin (angle);
+                float cosA = -std::cos (angle);
+
+                float x1 = pivotX + sinA * arcRadius;
+                float y1 = pivotY + cosA * arcRadius;
+                float x2 = pivotX + sinA * (arcRadius + tLen);
+                float y2 = pivotY + cosA * (arcRadius + tLen);
+
+                g.setColour (juce::Colour (0xff000000));
+                g.drawLine (x1, y1, x2, y2, tThick);
+
+                if (isMajor && (i == 0 || i == 10 || i == 20))
+                {
+                    juce::String label = (i == 0) ? "0" : (i == 10) ? "50" : "100";
+                    int labelW = labelFont.getStringWidth (label) + 4;
+                    int labelH = (int) labelFont.getHeight() + 2;
+
+                    float labelRadius = arcRadius + tickLen + labelGap + labelH * 0.5f;
+                    int lx = (int) (pivotX + sinA * labelRadius);
+                    int ly = (int) (pivotY + cosA * labelRadius);
+
+                    g.drawText (label, lx - labelW / 2, ly - labelH / 2, labelW, labelH, juce::Justification::centred);
+                }
+            }
+
+            // Aguja
+            float needleAngle = startAngle + auraNeedle * (endAngle - startAngle);
+            juce::Path needle;
+            needle.startNewSubPath (pivotX - 2.0f, pivotY);
+            needle.lineTo (pivotX, pivotY - (arcRadius - 2.0f));
+            needle.lineTo (pivotX + 2.0f, pivotY);
+            needle.closeSubPath();
+            needle.applyTransform (juce::AffineTransform::rotation (needleAngle, pivotX, pivotY));
+
+            g.setColour (juce::Colour (0x40000000));
+            juce::Path needleShadow = needle;
+            needleShadow.applyTransform (juce::AffineTransform::translation (2.0f, 2.0f));
+            g.fillPath (needleShadow);
+
+            g.setColour (juce::Colour (0xffd90d00));
+            g.fillPath (needle);
+
+            // Capuchón
+            juce::Path capPath;
+            capPath.addCentredArc (pivotX, pivotY, capRad, capRad, 0.0f, -juce::MathConstants<float>::pi * 0.5f, juce::MathConstants<float>::pi * 0.5f, true);
+            capPath.closeSubPath();
+
+            juce::ColourGradient capGrad (juce::Colour (0xff3c3f45), pivotX, pivotY - capRad,
+                                          juce::Colour (0xff0a0b0d), pivotX, pivotY + capRad, false);
+            g.setGradientFill (capGrad);
+            g.fillPath (capPath);
 
             g.setColour (juce::Colour (0xff000000));
-            g.drawLine (x1, y1, x2, y2, tickThick);
+            g.strokePath (capPath, juce::PathStrokeType (1.0f));
 
-            if (isMajor && (i == 0 || i == 10 || i == 20))
-            {
-                float labelRadius = arcRadius + (i == 10 ? 20.0f : 16.0f);
-                int lx = (int) (pivotX + sinA * labelRadius);
-                int ly = (int) (pivotY + cosA * labelRadius);
-
-                juce::String label = (i == 0) ? "0" : (i == 10) ? "50" : "100";
-                g.drawText (label, lx - 14, ly - 7, 28, 14, juce::Justification::centred);
-            }
+            g.setColour (juce::Colour (0xffa4a8b0));
+            g.fillEllipse (pivotX - 3.0f, pivotY - 3.0f, 6.0f, 6.0f);
         }
-
-        // Título AURA, con espacio de sobra respecto al "50"
-        g.setColour (juce::Colour (0xff000000));
-        g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
-        g.drawText ("AURA", innerVu.getX(), pivotY - arcRadius - 34.0f, innerVu.getWidth(), 16.0f, juce::Justification::centred);
-
-        // Aguja activa, proporcional al nuevo radio
-        float needleAngle = startAngle + auraNeedle * (endAngle - startAngle);
-        juce::Path needle;
-        needle.startNewSubPath (pivotX - 2.0f, pivotY);
-        needle.lineTo (pivotX, pivotY - (arcRadius - 2.0f));
-        needle.lineTo (pivotX + 2.0f, pivotY);
-        needle.closeSubPath();
-        needle.applyTransform (juce::AffineTransform::rotation (needleAngle, pivotX, pivotY));
-
-        g.setColour (juce::Colour (0x40000000));
-        juce::Path needleShadow = needle;
-        needleShadow.applyTransform (juce::AffineTransform::translation (2.0f, 2.0f));
-        g.fillPath (needleShadow);
-
-        g.setColour (juce::Colour (0xffd90d00));
-        g.fillPath (needle);
-
-        // Capuchón central con volumen 3D
-        juce::Path capPath;
-        float capRad = 14.0f;
-        capPath.addCentredArc (pivotX, pivotY, capRad, capRad, 0.0f, -juce::MathConstants<float>::pi * 0.5f, juce::MathConstants<float>::pi * 0.5f, true);
-        capPath.closeSubPath();
-
-        juce::ColourGradient capGrad (juce::Colour (0xff3c3f45), pivotX, pivotY - capRad,
-                                      juce::Colour (0xff0a0b0d), pivotX, pivotY + capRad, false);
-        g.setGradientFill (capGrad);
-        g.fillPath (capPath);
-
-        g.setColour (juce::Colour (0xff000000));
-        g.strokePath (capPath, juce::PathStrokeType (1.0f));
-
-        g.setColour (juce::Colour (0xffa4a8b0));
-        g.fillEllipse (pivotX - 3.0f, pivotY - 3.0f, 6.0f, 6.0f);
 
         // Reflejo de vidrio en la parte superior del dial
         juce::Path glassReflect;
@@ -544,8 +574,7 @@ public:
         juce::ColourGradient glassGrad (juce::Colour (0x55ffffff), innerVu.getX(), innerVu.getY(),
                                         juce::Colour (0x00ffffff), innerVu.getX(), innerVu.getY() + innerVu.getHeight() * 0.42f, false);
         g.setGradientFill (glassGrad);
-        g.fillPath (glassReflect);
-    }
+        g.fillPath (glassReflect);    }
 
     void resized() override
     {
